@@ -154,58 +154,58 @@ static NSString *const ESEventRetryKey = @"retry";
 {
     __block NSString *eventString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     
-    if ([eventString hasSuffix:ESEventSeparatorLFLF] ||
-        [eventString hasSuffix:ESEventSeparatorCRCR] ||
-        [eventString hasSuffix:ESEventSeparatorCRLFCRLF]) {
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-            eventString = [eventString stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-            NSMutableArray *components = [[eventString componentsSeparatedByString:ESEventKeyValuePairSeparator] mutableCopy];
-            
-            Event *e = [Event new];
-            e.readyState = kEventStateOpen;
-            
-            for (NSString *component in components) {
-                if (component.length == 0) {
-                    continue;
-                }
-                
-                NSInteger index = [component rangeOfString:ESKeyValueDelimiter].location;
-                if (index == NSNotFound || index == (component.length - 2)) {
-                    continue;
-                }
-                
-                NSString *key = [component substringToIndex:index];
-                NSString *value = [component substringFromIndex:index + ESKeyValueDelimiter.length];
-                
-                if ([key isEqualToString:ESEventIDKey]) {
-                    e.id = value;
-                    self.lastEventID = e.id;
-                } else if ([key isEqualToString:ESEventEventKey]) {
-                    e.event = value;
-                } else if ([key isEqualToString:ESEventDataKey]) {
-                    e.data = value;
-                } else if ([key isEqualToString:ESEventRetryKey]) {
-                    self.retryInterval = [value doubleValue];
-                }
+    //    if ([eventString hasSuffix:ESEventSeparatorLFLF] ||
+    //        [eventString hasSuffix:ESEventSeparatorCRCR] ||
+    //        [eventString hasSuffix:ESEventSeparatorCRLFCRLF]) {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+        eventString = [eventString stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+        NSMutableArray *components = [[eventString componentsSeparatedByString:ESEventKeyValuePairSeparator] mutableCopy];
+        
+        Event *e = [Event new];
+        e.readyState = kEventStateOpen;
+        
+        for (NSString *component in components) {
+            if (component.length == 0) {
+                continue;
             }
             
-            NSArray *messageHandlers = self.listeners[MessageEvent];
-            for (EventSourceEventHandler handler in messageHandlers) {
+            NSInteger index = [component rangeOfString:ESKeyValueDelimiter].location;
+            if (index == NSNotFound || index == (component.length - 2)) {
+                continue;
+            }
+            
+            NSString *key = [component substringToIndex:index];
+            NSString *value = [component substringFromIndex:index + ESKeyValueDelimiter.length];
+            
+            if ([key isEqualToString:ESEventIDKey]) {
+                e.id = value;
+                self.lastEventID = e.id;
+            } else if ([key isEqualToString:ESEventEventKey]) {
+                e.event = value;
+            } else if ([key isEqualToString:ESEventDataKey]) {
+                e.data = value;
+            } else if ([key isEqualToString:ESEventRetryKey]) {
+                self.retryInterval = [value doubleValue];
+            }
+        }
+        
+        NSArray *messageHandlers = self.listeners[MessageEvent];
+        for (EventSourceEventHandler handler in messageHandlers) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                handler(e);
+            });
+        }
+        
+        if (e.event != nil) {
+            NSArray *namedEventhandlers = self.listeners[e.event];
+            for (EventSourceEventHandler handler in namedEventhandlers) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     handler(e);
                 });
             }
-            
-            if (e.event != nil) {
-                NSArray *namedEventhandlers = self.listeners[e.event];
-                for (EventSourceEventHandler handler in namedEventhandlers) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        handler(e);
-                    });
-                }
-            }
-        });
-    }
+        }
+    });
+    //    }
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
